@@ -6,6 +6,9 @@ using CImGui.ImGuiGLFWBackend.LibCImGui
 using CImGui.ImGuiGLFWBackend.LibGLFW
 using CImGui.ImGuiOpenGLBackend
 using CImGui.ImGuiOpenGLBackend.ModernGL
+using DataFrames
+using CSV
+
 # using CImGui.ImGuiGLFWBackend.GLFW
 using CImGui.CSyntax
 include("backend.jl")
@@ -76,6 +79,10 @@ CImGui.AddFontFromFileTTF(fonts, "Inter font/Inter-VariableFont_slnt,wght.ttf", 
 ImGuiGLFWBackend.init(window_ctx)
 ImGuiOpenGLBackend.init(gl_ctx)
 
+activate_refresh::Bool = false
+data = Vector{Vector{String}}([])
+selectable_state = Vector{Bool}([])
+message_index::UInt = 0
 try
     demo_open = true
     clear_color = Cfloat[0.45, 0.55, 0.60, 1.00]
@@ -119,14 +126,37 @@ try
             CImGui.SameLine(0.0, -1)
 
             CImGui.PushStyleVar(CImGui.ImGuiStyleVar_FrameRounding, 10.0)
-            CImGui.Button("Refresh")
+
+            if CImGui.Button("Refresh")
+                data = []
+                df = CSV.File("data.csv") |> DataFrame
+                num_rows, num_columns = size(df)
+
+                for counter in eachindex(selectable_state) #deselect all
+                    selectable_state[counter] = false
+                end
+
+                for i in 1:num_rows
+                    push!(selectable_state, false)
+                    push!(data, [string(df[i, 1]), string(df[i, 2]), string(df[i, 3])])
+                end
+            end
+
+            for row_index in eachindex(data)
+                if CImGui.Selectable("Phone Number: $(data[row_index][1])\nTime: $(data[row_index][2])", selectable_state[row_index], 0) #create selectable
+                    for counter in eachindex(data) #deselect all
+                        selectable_state[counter] = false
+                    end
+                    message_index = row_index
+                    selectable_state[row_index] = true #select selectable
+
+                end
+                CImGui.Dummy((0, 5))
+            end
+
             CImGui.PopStyleVar()
 
             CImGui.Separator()
-
-            CImGui.Selectable("Phone Number:\nTime: ", true, 0)
-            CImGui.Dummy((0, 5))
-            CImGui.Selectable("Phone Number:\nTime: ", true, 0)
 
             CImGui.EndTabItem()
 
@@ -152,12 +182,22 @@ try
         CImGui.BeginChild("Message Box", (width[] * 0.784, height[] * 0.47), true)
         CImGui.TextColored((0.0, 1.0, 1.0, 1.0), "Message Box")
         CImGui.Separator()
-        CImGui.Button("Load to LCD")
+
+        if CImGui.Button("Load to LCD1")
+
+        end
+
+        CImGui.SameLine()
+        CImGui.Button("Load to LCD2")
         CImGui.SameLine()
         CImGui.Button("Reject Message")
         CImGui.Separator()
 
-        CImGui.SameLine(0.0, -1)
+        # CImGui.SameLine(0.0, -1)
+        if message_index != 0
+            CImGui.TextWrapped(df[message_index][3])
+        end
+        CImGui.TextWrapped(df)
 
         CImGui.EndChild()
 
@@ -206,5 +246,6 @@ finally
     ImGuiGLFWBackend.shutdown(window_ctx)
     CImGui.DestroyContext(ctx)
     glfwDestroyWindow(window)
-    
+
 end
+
