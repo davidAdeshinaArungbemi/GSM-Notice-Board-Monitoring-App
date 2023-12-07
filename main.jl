@@ -8,12 +8,7 @@ using CImGui.ImGuiOpenGLBackend
 using CImGui.ImGuiOpenGLBackend.ModernGL
 using DataFrames
 using CSV
-
-# using CImGui.ImGuiGLFWBackend.GLFW
 using CImGui.CSyntax
-include("backend.jl")
-Revise.includet("backend.jl")
-# include(joinpath(@__DIR__, "demo_window.jl"))
 
 glfwDefaultWindowHints()
 glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3)
@@ -80,9 +75,56 @@ ImGuiGLFWBackend.init(window_ctx)
 ImGuiOpenGLBackend.init(gl_ctx)
 
 activate_refresh::Bool = false
-data = Vector{Vector{String}}([])
-selectable_state = Vector{Bool}([])
+data::Vector{Vector{String}} = Vector{Vector{String}}([])
+selectable_state::Vector{Bool} = Vector{Bool}([])
 message_index::UInt = 0
+
+function Refresh() #refresh message
+    global data = []
+    global selectable_state = []
+    global message_index = 0
+
+    df = CSV.File("data.csv") |> DataFrame
+    num_rows, num_columns = size(df)
+
+    for i in 1:num_rows
+        push!(selectable_state, false)
+        push!(data, [string(df[i, 1]), string(df[i, 2]), string(df[i, 3])])
+    end
+end
+
+function DeleteMessage()
+    index_remove = -1
+    for counter in eachindex(data) #deselect all
+        if selectable_state[counter] == true
+            index_remove = counter
+            break
+        end
+    end
+
+    if index_remove == -1
+        println("No message selected") #send to logs later
+        return
+    end
+
+    deleteat!(data, index_remove) #remove vector at index_remove
+    deleteat!(selectable_state, index_remove) #remove state at index_remove
+
+    df = DataFrame(data, :auto)
+    df = permutedims(df)
+
+    try
+        rename!(df, [:Number, :Time, :Message])
+        csv_file_path = "data.csv"
+        CSV.write(csv_file_path, df)
+    catch
+        csv_file_path = "data.csv"
+        CSV.write(csv_file_path, df)
+    end
+
+    Refresh()
+end
+
 try
     demo_open = true
     clear_color = Cfloat[0.45, 0.55, 0.60, 1.00]
@@ -128,35 +170,24 @@ try
             CImGui.PushStyleVar(CImGui.ImGuiStyleVar_FrameRounding, 10.0)
 
             if CImGui.Button("Refresh")
-                data = []
-                df = CSV.File("data.csv") |> DataFrame
-                num_rows, num_columns = size(df)
-
-                for counter in eachindex(selectable_state) #deselect all
-                    selectable_state[counter] = false
-                end
-
-                for i in 1:num_rows
-                    push!(selectable_state, false)
-                    push!(data, [string(df[i, 1]), string(df[i, 2]), string(df[i, 3])])
-                end
+                Refresh()
             end
+
+            CImGui.Separator()
 
             for row_index in eachindex(data)
                 if CImGui.Selectable("Phone Number: $(data[row_index][1])\nTime: $(data[row_index][2])", selectable_state[row_index], 0) #create selectable
                     for counter in eachindex(data) #deselect all
-                        selectable_state[counter] = false
+                        global selectable_state[counter] = false
                     end
-                    message_index = row_index
-                    selectable_state[row_index] = true #select selectable
+                    global message_index = row_index
+                    global selectable_state[row_index] = true #select selectable
 
                 end
                 CImGui.Dummy((0, 5))
             end
 
             CImGui.PopStyleVar()
-
-            CImGui.Separator()
 
             CImGui.EndTabItem()
 
@@ -190,14 +221,20 @@ try
         CImGui.SameLine()
         CImGui.Button("Load to LCD2")
         CImGui.SameLine()
-        CImGui.Button("Reject Message")
+
+        if CImGui.Button("Reject Message")
+            DeleteMessage()
+        end
+
         CImGui.Separator()
 
         # CImGui.SameLine(0.0, -1)
         if message_index != 0
-            CImGui.TextWrapped(df[message_index][3])
+            CImGui.TextWrapped(data[message_index][3])
+
+        else
+            CImGui.TextWrapped("")
         end
-        CImGui.TextWrapped(df)
 
         CImGui.EndChild()
 
