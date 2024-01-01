@@ -11,6 +11,7 @@ using CImGui.ImGuiOpenGLBackend.ModernGL
 using DataFrames
 using CSV
 using CImGui.CSyntax
+using LibSerialPort
 
 glfwDefaultWindowHints()
 glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3)
@@ -40,8 +41,6 @@ io.ConfigFlags = unsafe_load(io.ConfigFlags) | CImGui.ImGuiConfigFlags_DockingEn
 
 # setup Dear ImGui style
 CImGui.StyleColorsDark()
-# CImGui.StyleColorsClassic()
-# CImGui.StyleColorsLight()
 
 # When viewports are enabled we tweak WindowRounding/WindowBg so platform windows can look identical to regular ones.
 style = Ptr{ImGuiStyle}(CImGui.GetStyle())
@@ -51,18 +50,10 @@ if unsafe_load(io.ConfigFlags) & ImGuiConfigFlags_ViewportsEnable == ImGuiConfig
     CImGui.c_set!(style.Colors, CImGui.ImGuiCol_WindowBg, ImVec4(col.x, col.y, col.z, 1.0f0))
 end
 
-# load Fonts
-# - If no fonts are loaded, dear imgui will use the default font. You can also load multiple fonts and use `CImGui.PushFont/PopFont` to select them.
-# - `CImGui.AddFontFromFileTTF` will return the `Ptr{ImFont}` so you can store it if you need to select the font among multiple.
-# - If the file cannot be loaded, the function will return C_NULL. Please handle those errors in your application (e.g. use an assertion, or display an error and quit).
-# - The fonts will be rasterized at a given size (w/ oversampling) and stored into a texture when calling `CImGui.Build()`/`GetTexDataAsXXXX()``, which `ImGui_ImplXXXX_NewFrame` below will call.
-# - Read 'fonts/README.txt' for more instructions and details.
 fonts_dir = joinpath(@__DIR__, "..", "fonts")
 fonts = unsafe_load(CImGui.GetIO().Fonts)
 # default_font = CImGui.AddFontDefault(fonts)
 CImGui.AddFontFromFileTTF(fonts, "Inter font/Inter-VariableFont_slnt,wght.ttf", 16)
-
-# @assert default_font != C_NULL
 
 # setup Platform/Renderer bindings
 ImGuiGLFWBackend.init(window_ctx)
@@ -72,19 +63,22 @@ activate_refresh::Bool = false
 data::Vector{Vector{String}} = Vector{Vector{String}}([])
 selectable_state::Vector{Bool} = Vector{Bool}([])
 message_index::UInt = 0
+logs::Vector{String} = []
 
 function Refresh() #refresh message
     global data = []
     global selectable_state = []
     global message_index = 0
 
-    df = CSV.File("data.csv") |> DataFrame
+    df = CSV.File("comms/data.csv") |> DataFrame
     num_rows, num_columns = size(df)
 
     for i in 1:num_rows
         push!(selectable_state, false)
         push!(data, [string(df[i, 1]), string(df[i, 2]), string(df[i, 3])])
     end
+
+    updateLogs("Message List Updated")
 end
 
 function DeleteMessage()
@@ -98,6 +92,7 @@ function DeleteMessage()
 
     if index_remove == -1
         println("No message selected") #send to logs later
+        updateLogs("No message selected")
         return
     end
 
@@ -107,21 +102,43 @@ function DeleteMessage()
     df = DataFrame(data, :auto)
     df = permutedims(df)
 
+    csv_file_path = "comms/data.csv"
+
     try
         rename!(df, [:Number, :Time, :Message])
-        csv_file_path = "data.csv"
         CSV.write(csv_file_path, df)
     catch
-        csv_file_path = "data.csv"
         CSV.write(csv_file_path, df)
     end
 
+    updateLogs("Message Delete Successful!")
     Refresh()
 end
+
+function updateLogs(a_log::String)
+    try
+        push!(logs, a_log)
+    catch
+    end
+end
+
+function printLogs()
+    for log in logs
+        CImGui.TextColored(ImVec4(1.0, 0.8, 0.0, 1.0), "> ")
+        CImGui.SameLine()
+        CImGui.TextColored(ImVec4(0.0, 1.0, 0.0, 1.0), log)
+    end
+end
+
+# for serial communication
+portname = "/dev/cu.usbserial-1410" #can change
+baudrate = 115200 #can change
 
 try
     demo_open = true
     clear_color = Cfloat[0.45, 0.55, 0.60, 1.00]
+    Refresh()
+
     while glfwWindowShouldClose(window) == 0
         glfwPollEvents()
         # start the Dear ImGui frame
@@ -209,14 +226,64 @@ try
         CImGui.Separator()
 
         if CImGui.Button("Load to LCD1")
+            if message_index != 0
+                message_to_send = data[message_index][3] * "\n"
+                try
+                    LibSerialPort.open(portname, baudrate) do sp
+                        sleep(1) #gives time to establish serial connection
+                        sp_flush(sp, SP_BUF_BOTH) #discards left over bytes waiting at the port, both input and output buffer
+                        write(sp, "L1:$message_to_send")
+                        updateLogs("Message sent to port")
+                        serial_response = readline(sp)
 
+                        if !isempty(serial_response)
+                            println(serial_response)
+                            updateLogs("Successful\nResponse: $serial_response")
+                        else
+                            updateLogs("Failed! No Response")
+                        end
+                    end
+                catch e
+                    println(e)
+                    updateLogs(string(e))
+                end
+            else
+                println("No message selected") #send to logs later
+                updateLogs("No message selected")
+            end
         end
 
         CImGui.SameLine()
-        CImGui.Button("Load to LCD2")
+        if CImGui.Button("Load to LCD2")
+            if message_index != 0
+                message_to_send = data[message_index][3] * "\n"
+                try
+                    LibSerialPort.open(portname, baudrate) do sp
+                        sleep(1) #gives time to establish serial connection
+                        sp_flush(sp, SP_BUF_BOTH) #discards left over bytes waiting at the port, both input and output buffer
+                        write(sp, "L2:$message_to_send")
+                        serial_response = readline(sp)
+
+                        if !isempty(serial_response)
+                            println(serial_response)
+                            updateLogs("Successful\nResponse: $serial_response")
+                        else
+                            updateLogs("Failed! No Response")
+                        end
+                    end
+                catch e
+                    println(e)
+                    updateLogs(string(e))
+                end
+            else
+                println("No message selected") #send to logs later
+                updateLogs("No message selected")
+            end
+        end
+
         CImGui.SameLine()
 
-        if CImGui.Button("Reject Message")
+        if CImGui.Button("Delete Message")
             DeleteMessage()
         end
 
@@ -236,7 +303,8 @@ try
         CImGui.TextColored((1.0, 0.8, 0.0, 1.0), "Logs")
         CImGui.Separator()
 
-        CImGui.TextWrapped("A text")
+        # CImGui.TextWrapped("A text")
+        printLogs()
 
         CImGui.EndChild()
 
