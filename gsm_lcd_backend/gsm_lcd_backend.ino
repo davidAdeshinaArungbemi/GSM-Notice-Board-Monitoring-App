@@ -61,4 +61,5 @@ void setup() {
 
 void loop() {
   updateLCD();
+  // lcd1.print("Hello world");
 }

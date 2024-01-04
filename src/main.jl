@@ -226,11 +226,12 @@ try
         CImGui.Separator()
 
         if CImGui.Button("Load to LCD1")
+            updateLogs("Sending to LCD1")
             if message_index != 0
                 message_to_send = data[message_index][3] * "\n"
                 try
                     LibSerialPort.open(portname, baudrate) do sp
-                        sleep(1) #gives time to establish serial connection
+                        sleep(2) #gives time to establish serial connection
                         sp_flush(sp, SP_BUF_BOTH) #discards left over bytes waiting at the port, both input and output buffer
                         write(sp, "L1:$message_to_send")
                         updateLogs("Message sent to port")
