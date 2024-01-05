@@ -1,5 +1,5 @@
 import Pkg
-Pkg.resolve()
+Pkg.instantiate()
 using Revise
 using GLFW
 using CImGui
@@ -131,8 +131,17 @@ function printLogs()
 end
 
 # for serial communication
-portname = "/dev/cu.usbserial-1410" #can change
-baudrate = 115200 #can change
+portname::String = if Sys.iswindows()
+    "COM5"
+    # updateLogs("WindowsOS Detected!\nUtilising COM5")
+elseif Sys.isapple()
+    "/dev/cu.usbserial-1410"
+    # updateLogs("macOS Detected\nutilising /dev/cu.usbserial-1410")
+else
+    error("Unknown OS detected!\nSupported OS include: Windows and macOS")
+end
+
+global baudrate = 115200 #can change
 
 try
     demo_open = true
