@@ -75,7 +75,7 @@ function Refresh() #refresh message
 
     for i in 1:num_rows
         push!(selectable_state, false)
-        push!(data, [string(df[i, 1]), string(df[i, 2]), string(df[i, 3])])
+        push!(data, [string(df[i, 1]), string(df[i, 2]), string(df[i, 3]), string(df[i, 4])])
     end
 
     updateLogs("Message List Updated")
@@ -105,7 +105,7 @@ function DeleteMessage()
     csv_file_path = "comms/data.csv"
 
     try
-        rename!(df, [:Number, :Time, :Message])
+        rename!(df, [:Number, :Date, :Time, :Message])
         CSV.write(csv_file_path, df)
     catch
         CSV.write(csv_file_path, df)
@@ -129,6 +129,12 @@ function printLogs()
         CImGui.TextColored(ImVec4(0.0, 1.0, 0.0, 1.0), log)
     end
 end
+
+function processSerialResponse()
+
+end
+
+serialResponse = Threads.@spawn readData(imuChannel, urlChannel, measurement_dtype)
 
 # for serial communication
 portname::String = if Sys.iswindows()
@@ -247,16 +253,15 @@ try
                         sp_flush(sp, SP_BUF_BOTH) #discards left over bytes waiting at the port, both input and output buffer
                         write(sp, "L1:$message_to_send")
                         updateLogs("Message sent to port")
-                        if peek(sp) == 'L'
-                            serial_response = readline(sp)
 
-                            if !isempty(serial_response)
-                                println(serial_response)
-                                updateLogs("Successful\nResponse: $serial_response")
-                            else
-                                updateLogs("Failed! No Response")
-                            end
-                        end
+                        # serial_response = readline(sp)
+
+                        # if !isempty(serial_response)
+                        #     println(serial_response)
+                        #     updateLogs("Successful\nResponse: $serial_response")
+                        # else
+                        #     updateLogs("Failed! No Response")
+                        # end
                     end
                 catch e
                     println(e)

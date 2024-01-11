@@ -3,15 +3,15 @@
 //Create software serial object to communicate with SIM800L
 SoftwareSerial gsmSerial(3, 2); //SIM800L Tx & Rx is connected to Arduino #3 & #2
 
-#define MESSAGE_LENGTH 100
+#define MESSAGE_LENGTH 200
 #define NULLADDRESS -1
 char messageBuffer[MESSAGE_LENGTH];
 int bufferAddress = NULLADDRESS;
 
-// S: => Status
+// N: => Network
 // O: => Logs
-// L: => LCD
 // M: => Message
+// L: => LCD
 
 void setup()
 {
@@ -35,7 +35,7 @@ void setup()
 
 void checkNetworkStatus(){
   gsmSerial.println("AT+CSQ");//Signal quality test, value range is 0-31 , 31 is the best
-  Serial.println("S:"+gsmSerial.readString());
+  Serial.println("N:"+gsmSerial.readString());
 
   gsmSerial.println("AT+CCID"); //Read SIM information to confirm whether the SIM is plugged
   Serial.println("O:"+gsmSerial.readString());
