@@ -214,6 +214,9 @@ try
         end
 
         if CImGui.BeginTabItem("Allowed")
+            for counter in eachindex(data) #deselect selectables 
+                global selectable_state[counter] = false
+            end
 
             CImGui.TextColored((0.0, 1.0, 0.0, 1.0), "Allowed List")
             CImGui.Separator()
@@ -244,13 +247,15 @@ try
                         sp_flush(sp, SP_BUF_BOTH) #discards left over bytes waiting at the port, both input and output buffer
                         write(sp, "L1:$message_to_send")
                         updateLogs("Message sent to port")
-                        serial_response = readline(sp)
+                        if peek(sp) == 'L'
+                            serial_response = readline(sp)
 
-                        if !isempty(serial_response)
-                            println(serial_response)
-                            updateLogs("Successful\nResponse: $serial_response")
-                        else
-                            updateLogs("Failed! No Response")
+                            if !isempty(serial_response)
+                                println(serial_response)
+                                updateLogs("Successful\nResponse: $serial_response")
+                            else
+                                updateLogs("Failed! No Response")
+                            end
                         end
                     end
                 catch e
@@ -263,33 +268,33 @@ try
             end
         end
 
-        CImGui.SameLine()
-        if CImGui.Button("Load to LCD2")
-            if message_index != 0
-                message_to_send = data[message_index][3] * "\n"
-                try
-                    LibSerialPort.open(portname, baudrate) do sp
-                        sleep(1) #gives time to establish serial connection
-                        sp_flush(sp, SP_BUF_BOTH) #discards left over bytes waiting at the port, both input and output buffer
-                        write(sp, "L2:$message_to_send")
-                        serial_response = readline(sp)
+        # CImGui.SameLine()
+        # if CImGui.Button("Load to LCD2")
+        #     if message_index != 0
+        #         message_to_send = data[message_index][3] * "\n"
+        #         try
+        #             LibSerialPort.open(portname, baudrate) do sp
+        #                 sleep(1) #gives time to establish serial connection
+        #                 sp_flush(sp, SP_BUF_BOTH) #discards left over bytes waiting at the port, both input and output buffer
+        #                 write(sp, "L2:$message_to_send")
+        #                 serial_response = readline(sp)
 
-                        if !isempty(serial_response)
-                            println(serial_response)
-                            updateLogs("Successful\nResponse: $serial_response")
-                        else
-                            updateLogs("Failed! No Response")
-                        end
-                    end
-                catch e
-                    println(e)
-                    updateLogs(string(e))
-                end
-            else
-                println("No message selected") #send to logs later
-                updateLogs("No message selected")
-            end
-        end
+        #                 if !isempty(serial_response)
+        #                     println(serial_response)
+        #                     updateLogs("Successful\nResponse: $serial_response")
+        #                 else
+        #                     updateLogs("Failed! No Response")
+        #                 end
+        #             end
+        #         catch e
+        #             println(e)
+        #             updateLogs(string(e))
+        #         end
+        #     else
+        #         println("No message selected") #send to logs later
+        #         updateLogs("No message selected")
+        #     end
+        # end
 
         CImGui.SameLine()
 
