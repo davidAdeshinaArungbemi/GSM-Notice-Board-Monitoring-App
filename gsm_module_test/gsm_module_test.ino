@@ -16,12 +16,11 @@ String strDel = ">";
 void setup()
 {
   //Begin serial communication with Arduino and Arduino IDE (Serial Monitor)
-  Serial.begin(115200);
+  Serial.begin(9600);
   //Begin serial communication with Arduino and SIM800L
-  gsmSerial.begin(115200);
+  gsmSerial.begin(9600);
 
   Serial.println("Initialising..."+strDel); 
-  delay(1000);
 
   gsmSerial.println("AT"); //Once the handshake test is successful, it will back to OK
   Serial.println(gsmSerial.readString()+strDel);
@@ -29,8 +28,6 @@ void setup()
   setNetworkStatus();
 
   clearBufferAndCounter();//fill with '>'
-  // gsmSerial.println("AT+CBC");
-  // Serial.println(gsmSerial.readString());
   // gsmSerial.println("AT+GMI");
   // Serial.println(gsmSerial.readString());
   // gsmSerial.println("AT+GMM");
@@ -55,6 +52,9 @@ void setNetworkStatus(){
 
   gsmSerial.println("AT+CNMI=1,2,0,0,0"); // Decides how newly arrived SMS messages should be handled
   Serial.println(gsmSerial.readString()+strDel);
+
+  gsmSerial.println("AT+CBC");
+  Serial.println(gsmSerial.readString());
 }
 
 String extractCharArray(){ //converts message in messageBuffer array to String 
@@ -78,7 +78,6 @@ void sendMessageToSerial(String serialMessage){
 
 void getGSMData() //get gsm message
 {
-  delay(500);
   // Serial.println(gsmSerial.read());
   if (gsmSerial.available() && bufferAddress < MESSAGE_LENGTH) //check if message is available, check for end and message length limit
   {
@@ -86,6 +85,7 @@ void getGSMData() //get gsm message
     bufferAddress++;//increment buffer addresss
     messageBuffer[bufferAddress] = gsmSerial.read(); //store char in buffer address
   }
+  
   else if (gsmSerial.peek() == '>') {
     String serialMessage = extractCharArray();
     sendMessageToSerial(serialMessage);

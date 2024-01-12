@@ -150,75 +150,60 @@ function printLogs()
 end
 
 function processSerialResponse()
-    sp = Any
-    connected = false
-    while !connected
-        try
-            global sp = LibSerialPort.open(portname, baudrate)
-            connected = true
-        catch e
-            close(sp)
-            println(e)
-            updateLogs(e)
-            sleep(0.5) #gives time to establish serial connection
-        end
-    end
-
-    sp_flush(sp, SP_BUF_BOTH) #discards left over bytes waiting at the port, both input and output buffer
-    serial_response = ""
-    while true
-        # try
-        if bytesavailable(sp) > 0 #if buffer is empty ignore code below if statement
-            chars = read(sp, Char)
-            serial_response = serial_response * string(chars)
-            if chars != '>'
-                continue
-            end
-
-            # println(bytesavailable(sp))
-            # serial_response = readuntil(sp, '>') #blocking until '>'
-            serial_response = serial_response[1:end-1]
-            serial_response = replace(serial_response, '\x00' => "")
-
-            println(serial_response)
-            if !isempty(serial_response)
-                @match serial_response[1:2] begin
-                    "L:" => begin
-                        global lcd_status = "Connected"
+    LibSerialPort.open(portname, baudrate) do sp
+        sleep(1)
+        sp_flush(sp, SP_BUF_BOTH) #discards left over bytes waiting at the port, both input and output buffer
+        serial_response = ""
+        while true
+            try
+                if bytesavailable(sp) > 0 #if buffer is empty ignore code below if statement
+                    chars = read(sp, Char)
+                    serial_response = serial_response * string(chars)
+                    if chars != '>'
+                        continue
                     end
 
-                    "N:" => begin
-                        global network_status = split(serial_response[22:end], ',')
+                    serial_response = serial_response[1:end-1]
+                    serial_response = replace(serial_response, '\x00' => "")
+
+                    println(serial_response)
+                    if !isempty(serial_response)
+                        @match serial_response[1:2] begin
+                            "L:" => begin
+                                global lcd_status = "Connected"
+                            end
+
+                            "N:" => begin
+                                global network_status = split(serial_response[22:end], ',')
+                            end
+
+                            "M:" => begin
+                                message_details = serial_response[3:end]
+                                phone_number = message_details[8:21]
+                                date_and_time = split(serialResponse[28:47])
+                                m_date = date_and_time[0]
+                                m_time = date_and_time[1]
+                                mess = message_details[50:end]
+
+                                push!(data, [phone_number, m_date, m_time, mess])
+                                updateCSV()
+                            end
+
+                            _ => updateLogs(serial_response)
+                        end
                     end
-
-                    "M:" => begin
-                        message_details = serial_response[3:end]
-                        phone_number = message_details[8:21]
-                        date_and_time = split(serialResponse[28:47])
-                        m_date = date_and_time[0]
-                        m_time = date_and_time[1]
-                        mess = message_details[50:end]
-
-                        push!(data, [phone_number, m_date, m_time, mess])
-                        updateCSV()
-                    end
-
-                    _ => updateLogs(serial_response)
                 end
-                # global serial_response = ""
+            catch e
+                updateLogs(e)
             end
+            sleep(0.1)
         end
-        # println("buffer empty")
-        # catch e
-        # updateLogs(e)
-        # end
-        sleep(0.1)
     end
-    close(sp)
-    # end
 end
 
 serialResponse = Threads.@spawn processSerialResponse()
+
+# @async processSerialResponse()
 
 try
     demo_open = true
