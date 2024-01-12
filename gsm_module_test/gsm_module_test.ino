@@ -54,7 +54,7 @@ void setNetworkStatus(){
   Serial.println(gsmSerial.readString()+strDel);
 
   gsmSerial.println("AT+CBC");
-  Serial.println(gsmSerial.readString());
+  Serial.println(gsmSerial.readString()+strDel);
 }
 
 String extractCharArray(){ //converts message in messageBuffer array to String 

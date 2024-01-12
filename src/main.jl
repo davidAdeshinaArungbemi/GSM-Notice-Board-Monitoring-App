@@ -79,7 +79,7 @@ else
     error("Unknown OS detected!\nSupported OS include: Windows and macOS")
 end
 
-global baudrate = 115200 #can change
+global baudrate = 9600 #can change. VERY IMPORTANT!
 
 function Refresh() #refresh message
     global data = []
@@ -150,60 +150,105 @@ function printLogs()
 end
 
 function processSerialResponse()
-    LibSerialPort.open(portname, baudrate) do sp
-        sleep(1)
-        sp_flush(sp, SP_BUF_BOTH) #discards left over bytes waiting at the port, both input and output buffer
-        serial_response = ""
-        while true
-            try
-                if bytesavailable(sp) > 0 #if buffer is empty ignore code below if statement
-                    chars = read(sp, Char)
-                    serial_response = serial_response * string(chars)
-                    if chars != '>'
-                        continue
-                    end
-
-                    serial_response = serial_response[1:end-1]
-                    serial_response = replace(serial_response, '\x00' => "")
-
-                    println(serial_response)
-                    if !isempty(serial_response)
-                        @match serial_response[1:2] begin
-                            "L:" => begin
-                                global lcd_status = "Connected"
-                            end
-
-                            "N:" => begin
-                                global network_status = split(serial_response[22:end], ',')
-                            end
-
-                            "M:" => begin
-                                message_details = serial_response[3:end]
-                                phone_number = message_details[8:21]
-                                date_and_time = split(serialResponse[28:47])
-                                m_date = date_and_time[0]
-                                m_time = date_and_time[1]
-                                mess = message_details[50:end]
-
-                                push!(data, [phone_number, m_date, m_time, mess])
-                                updateCSV()
-                            end
-
-                            _ => updateLogs(serial_response)
-                        end
-                    end
-                end
-            catch e
-                updateLogs(e)
-            end
-            sleep(0.1)
+    while true #check if port available
+        try
+            sp = LibSerialPort.open(portname, baudrate)
+            close(sp)
+            updateLogs("Port: $portname Available!")
+            break
+        catch e
+            updateLogs("Port: $portname Unavailable!")
+            sleep(5)
         end
     end
+
+    try
+        LibSerialPort.open(portname, baudrate) do sp
+            # sp_flush(sp, SP_BUF_BOTH) #discards left over bytes waiting at the port, both input and output buffer
+            updateLogs("Successful Port Connection!")
+            serial_response = ""
+            # while bytesavailable(sp) > 0 #clear input buffer
+            #     read(sp, Char)
+            #     sleep(0.05)
+            # end
+            updateLogs("Discarding Data Remnants........")
+            sleep(2) #add time delay for nice effect
+            try
+                sp_flush(sp, SP_BUF_BOTH)
+            catch e
+                println(e)
+            end
+
+            updateLogs("Remnants discarded")
+            while true
+                try
+                    # println(readavailable(sp))
+                    if bytesavailable(sp) > 0 #if buffer is empty ignore code below if statement
+                        println("Hello")
+                        chars = read(sp, Char)
+                        try
+                            temp_response = serial_response
+                            global serial_response = temp_response * string(chars)
+                        catch
+                            println("serial_response variable is the error")
+                        end
+                        if chars != '>'
+                            continue
+                        end
+                        global serial_response = serial_response[1:end-1]
+                        global serial_response = replace(serial_response, '\x00' => "")
+
+                        println(serial_response)
+                        println(serial_response[1:2])
+                        if !isempty(serial_response)
+                            @match serial_response[1:2] begin
+                                "L:" => begin
+                                    global lcd_status = "Connected"
+                                    global serial_response = ""
+                                end
+
+                                "N:" => begin
+                                    global network_status = split(serial_response[22:end], ',')
+                                    global serial_response = ""
+                                end
+
+                                "M:" => begin
+                                    updateLogs("Message Incoming")
+                                    message_details = serial_response[3:end]
+                                    phone_number = message_details[8:21]
+                                    date_and_time = split(serialResponse[28:47])
+                                    m_date = date_and_time[0]
+                                    m_time = date_and_time[1]
+                                    mess = message_details[50:end]
+
+                                    push!(data, [phone_number, m_date, m_time, mess])
+                                    updateCSV()
+                                    global serial_response = ""
+                                end
+
+                                _ => begin
+                                    println(serial_response)
+                                    updateLogs(serial_response)
+                                    serial_response = ""
+                                end
+                            end
+                        end
+                    end
+                catch e
+                    println(e)
+                    updateLogs(e)
+                end
+                sleep(0.01)
+            end
+        end
+    catch e
+        println(e)
+        updateLogs(e)
+    end
 end
-
-serialResponse = Threads.@spawn processSerialResponse()
-
 # @async processSerialResponse()
+
+Threads.@spawn processSerialResponse()
 
 try
     demo_open = true
@@ -315,7 +360,7 @@ try
                 message_to_send = data[message_index][3] * "\n"
                 try
                     LibSerialPort.open(portname, baudrate) do sp
-                        sleep(2) #gives time to establish serial connection
+                        # sleep(0.2) #gives time to establish serial connection
                         sp_flush(sp, SP_BUF_BOTH) #discards left over bytes waiting at the port, both input and output buffer
                         write(sp, "L1:$message_to_send")
                         updateLogs("Message sent to port")
@@ -393,7 +438,7 @@ try
 
         glfwSwapBuffers(window)
 
-        sleep(0.1)
+        sleep(0.01)
     end
 catch e
     @error "Error in renderloop!" exception = e
