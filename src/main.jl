@@ -12,6 +12,7 @@ using DataFrames
 using CSV
 using CImGui.CSyntax
 using LibSerialPort
+using Match
 
 glfwDefaultWindowHints()
 glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3)
@@ -65,6 +66,21 @@ selectable_state::Vector{Bool} = Vector{Bool}([])
 message_index::UInt = 0
 logs::Vector{String} = []
 
+gsm_output::String = ""
+lcd_status::String = "Disconnected"
+network_status::String = "No Network"
+
+# for serial communication
+portname::String = if Sys.iswindows()
+    "COM5"
+elseif Sys.isapple()
+    "/dev/cu.usbserial-1410"
+else
+    error("Unknown OS detected!\nSupported OS include: Windows and macOS")
+end
+
+global baudrate = 115200 #can change
+
 function Refresh() #refresh message
     global data = []
     global selectable_state = []
@@ -81,24 +97,7 @@ function Refresh() #refresh message
     updateLogs("Message List Updated")
 end
 
-function DeleteMessage()
-    index_remove = -1
-    for counter in eachindex(data) #deselect all
-        if selectable_state[counter] == true
-            index_remove = counter
-            break
-        end
-    end
-
-    if index_remove == -1
-        println("No message selected") #send to logs later
-        updateLogs("No message selected")
-        return
-    end
-
-    deleteat!(data, index_remove) #remove vector at index_remove
-    deleteat!(selectable_state, index_remove) #remove state at index_remove
-
+function updateCSV()
     df = DataFrame(data, :auto)
     df = permutedims(df)
 
@@ -111,43 +110,117 @@ function DeleteMessage()
         CSV.write(csv_file_path, df)
     end
 
-    updateLogs("Message Delete Successful!")
     Refresh()
 end
 
-function updateLogs(a_log::String)
-    try
-        push!(logs, a_log)
-    catch
+function DeleteMessage()
+    index_remove = -1
+    for counter in eachindex(data) #deselect all
+        if selectable_state[counter] == true
+            index_remove = counter
+            break
+        end
     end
+
+    if index_remove == -1
+        updateLogs("No message selected")
+        return
+    end
+
+    deleteat!(data, index_remove) #remove vector at index_remove
+    deleteat!(selectable_state, index_remove) #remove state at index_remove
+
+    updateLogs("Message Delete Successful!")
+
+end
+
+function updateLogs(a_log::String)
+    # try
+    push!(logs, a_log)
+    # catch
+    # end
 end
 
 function printLogs()
     for log in logs
-        CImGui.TextColored(ImVec4(1.0, 0.8, 0.0, 1.0), "> ")
+        CImGui.TextColored(ImVec4(1.0, 1.0, 1.0, 1.0), "> ")
         CImGui.SameLine()
-        CImGui.TextColored(ImVec4(0.0, 1.0, 0.0, 1.0), log)
+        CImGui.TextColored(ImVec4(1.0, 1.0, 0.0, 1.0), log)
     end
 end
 
 function processSerialResponse()
+    sp = Any
+    connected = false
+    while !connected
+        try
+            global sp = LibSerialPort.open(portname, baudrate)
+            connected = true
+        catch e
+            close(sp)
+            println(e)
+            updateLogs(e)
+            sleep(0.5) #gives time to establish serial connection
+        end
 
+    end
+
+    sp_flush(sp, SP_BUF_BOTH) #discards left over bytes waiting at the port, both input and output buffer
+    serial_response = ""
+    while true
+        # try
+        if bytesavailable(sp) > 0 #if buffer is empty ignore code below if statement
+            # println("hi")
+            chars = read(sp, Char)
+            serial_response = serial_response * string(chars)
+            if chars != '>'
+                continue
+            end
+
+            # println(bytesavailable(sp))
+            # serial_response = readuntil(sp, '>') #blocking until '>'
+            serial_response = serial_response[1:end-1]
+            serial_response = replace(serial_response, '\x00' => "")
+
+            println(serial_response)
+            if !isempty(serial_response)
+                @match serial_response[1:2] begin
+                    "L:" => begin
+                        global lcd_status = "Connected"
+                    end
+
+                    "N:" => begin
+                        global network_status = split(serial_response[22:end], ',')
+                    end
+
+                    "M:" => begin
+                        message_details = serial_response[3:end]
+                        phone_number = message_details[8:21]
+                        date_and_time = split(serialResponse[28:47])
+                        m_date = date_and_time[0]
+                        m_time = date_and_time[1]
+                        mess = message_details[50:end]
+
+                        push!(data, [phone_number, m_date, m_time, mess])
+                        updateCSV()
+                    end
+
+                    _ => updateLogs(serial_response)
+                end
+                # global serial_response = ""
+            end
+        end
+        # println("buffer empty")
+        # catch e
+        # updateLogs(e)
+        # end
+        sleep(0.1)
+    end
+    close(sp)
+    # end
 end
 
-serialResponse = Threads.@spawn readData(imuChannel, urlChannel, measurement_dtype)
-
-# for serial communication
-portname::String = if Sys.iswindows()
-    "COM5"
-    # updateLogs("WindowsOS Detected!\nUtilising COM5")
-elseif Sys.isapple()
-    "/dev/cu.usbserial-1410"
-    # updateLogs("macOS Detected\nutilising /dev/cu.usbserial-1410")
-else
-    error("Unknown OS detected!\nSupported OS include: Windows and macOS")
-end
-
-global baudrate = 115200 #can change
+serialResponse = Threads.@spawn processSerialResponse()
 
 try
     demo_open = true
@@ -174,11 +247,22 @@ try
         CImGui.BeginChild("Status", (width[] * 0.989, height[] * 0.037), true, CImGui.ImGuiWindowFlags_NoScrollbar)
         CImGui.TextColored((1.0, 1.0, 0.5, 1.0), "LCD Status: ")
         CImGui.SameLine()
-        CImGui.TextColored((0.0, 1.0, 0.0, 1.0), "Good")
+
+        if lcd_status == "Connected"
+            CImGui.TextColored((0.0, 1.0, 0.0, 1.0), lcd_status)
+        else
+            CImGui.TextColored((1.0, 0.0, 0.0, 1.0), lcd_status)
+        end
+
         CImGui.SameLine()
         CImGui.TextColored((1.0, 1.0, 0.5, 1.0), "Network Status: ")
         CImGui.SameLine()
-        CImGui.TextColored((0.0, 1.0, 0.0, 1.0), "Good")
+
+        if network_status == "No Network"
+            CImGui.TextColored((1.0, 0.0, 0.0, 1.0), network_status)
+        else
+            CImGui.TextColored((0.0, 1.0, 0.0, 1.0), network_status)
+        end
 
         CImGui.EndChild()
 
@@ -202,13 +286,12 @@ try
             CImGui.Separator()
 
             for row_index in eachindex(data)
-                if CImGui.Selectable("Phone Number: $(data[row_index][1])\nTime: $(data[row_index][2])", selectable_state[row_index], 0) #create selectable
+                if CImGui.Selectable("Phone Number: $(data[row_index][1])\nDate: $(data[row_index][2])\nTime: $(data[row_index][3])", selectable_state[row_index], 0) #create selectable
                     for counter in eachindex(data) #deselect all
                         global selectable_state[counter] = false
                     end
                     global message_index = row_index
                     global selectable_state[row_index] = true #select selectable
-
                 end
                 CImGui.Dummy((0, 5))
             end
@@ -273,34 +356,6 @@ try
             end
         end
 
-        # CImGui.SameLine()
-        # if CImGui.Button("Load to LCD2")
-        #     if message_index != 0
-        #         message_to_send = data[message_index][3] * "\n"
-        #         try
-        #             LibSerialPort.open(portname, baudrate) do sp
-        #                 sleep(1) #gives time to establish serial connection
-        #                 sp_flush(sp, SP_BUF_BOTH) #discards left over bytes waiting at the port, both input and output buffer
-        #                 write(sp, "L2:$message_to_send")
-        #                 serial_response = readline(sp)
-
-        #                 if !isempty(serial_response)
-        #                     println(serial_response)
-        #                     updateLogs("Successful\nResponse: $serial_response")
-        #                 else
-        #                     updateLogs("Failed! No Response")
-        #                 end
-        #             end
-        #         catch e
-        #             println(e)
-        #             updateLogs(string(e))
-        #         end
-        #     else
-        #         println("No message selected") #send to logs later
-        #         updateLogs("No message selected")
-        #     end
-        # end
-
         CImGui.SameLine()
 
         if CImGui.Button("Delete Message")
@@ -309,9 +364,8 @@ try
 
         CImGui.Separator()
 
-        # CImGui.SameLine(0.0, -1)
         if message_index != 0
-            CImGui.TextWrapped(data[message_index][3])
+            CImGui.TextWrapped(data[message_index][4])
 
         else
             CImGui.TextWrapped("")
@@ -323,7 +377,6 @@ try
         CImGui.TextColored((1.0, 0.8, 0.0, 1.0), "Logs")
         CImGui.Separator()
 
-        # CImGui.TextWrapped("A text")
         printLogs()
 
         CImGui.EndChild()
@@ -356,6 +409,8 @@ try
         end
 
         glfwSwapBuffers(window)
+
+        sleep(0.1)
     end
 catch e
     @error "Error in renderloop!" exception = e
@@ -367,4 +422,3 @@ finally
     glfwDestroyWindow(window)
 
 end
-

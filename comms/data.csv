@@ -1,4 +1,2 @@
-Number,Time,Message
-"+222 18456582,20",16,"2,Hallo! Julia.Guten Morgen Andy! Wein und brot. bitte!"
-"+234 38446582,13",23,"10,12"
-"+232 3845d512,14",51,"20,26th August-12pm Sing!"
+Number,Date,Time,Message
++234,12/23/12,12:30:12,Hello world
