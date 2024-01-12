@@ -17,16 +17,15 @@ void setup()
 {
   //Begin serial communication with Arduino and Arduino IDE (Serial Monitor)
   Serial.begin(115200);
-  
   //Begin serial communication with Arduino and SIM800L
-  gsmSerial.begin(9600);
+  gsmSerial.begin(115200);
 
-  delay(500);
-  Serial.println("Initializing..."+strDel); 
-  delay(500);
+  Serial.println("Initialising..."+strDel); 
+  delay(1000);
 
   gsmSerial.println("AT"); //Once the handshake test is successful, it will back to OK
   Serial.println(gsmSerial.readString()+strDel);
+
   setNetworkStatus();
 
   clearBufferAndCounter();//fill with '>'
@@ -79,6 +78,7 @@ void sendMessageToSerial(String serialMessage){
 
 void getGSMData() //get gsm message
 {
+  delay(500);
   // Serial.println(gsmSerial.read());
   if (gsmSerial.available() && bufferAddress < MESSAGE_LENGTH) //check if message is available, check for end and message length limit
   {

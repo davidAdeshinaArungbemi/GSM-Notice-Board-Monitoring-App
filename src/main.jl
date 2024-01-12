@@ -162,7 +162,6 @@ function processSerialResponse()
             updateLogs(e)
             sleep(0.5) #gives time to establish serial connection
         end
-
     end
 
     sp_flush(sp, SP_BUF_BOTH) #discards left over bytes waiting at the port, both input and output buffer
@@ -170,7 +169,6 @@ function processSerialResponse()
     while true
         # try
         if bytesavailable(sp) > 0 #if buffer is empty ignore code below if statement
-            # println("hi")
             chars = read(sp, Char)
             serial_response = serial_response * string(chars)
             if chars != '>'
