@@ -12,6 +12,7 @@ String strDel = ">";
 // N: => Network
 // M: => Message
 // L: => LCD
+// B: => Battery
 
 void setup()
 {
@@ -20,10 +21,10 @@ void setup()
   //Begin serial communication with Arduino and SIM800L
   gsmSerial.begin(9600);
 
-  Serial.println("Initialising..."+strDel); 
+  Serial.println("<Initialising..."+strDel); 
 
   gsmSerial.println("AT"); //Once the handshake test is successful, it will back to OK
-  Serial.println(gsmSerial.readString()+strDel);
+  Serial.println("<"+gsmSerial.readString()+strDel);
 
   setNetworkStatus();
 
@@ -34,27 +35,27 @@ void setup()
   // Serial.println(gsmSerial.readString());
   // gsmSerial.println("AT+GMR");
   // Serial.println(gsmSerial.readString());
-  Serial.println("Ready!"+strDel);
+  Serial.println("<Ready!"+strDel);
 }
 
 void setNetworkStatus(){
   gsmSerial.println("AT+CSQ");//Signal quality test, value range is 0-31 , 31 is the best
-  Serial.println("N:"+gsmSerial.readString()+strDel);
+  Serial.println("<N:"+gsmSerial.readString()+strDel);
 
   gsmSerial.println("AT+CCID"); //Read SIM information to confirm whether the SIM is plugged
-  Serial.println(gsmSerial.readString()+strDel);
+  Serial.println("<"+gsmSerial.readString()+strDel);
 
   gsmSerial.println("AT+CREG?"); //Check whether it has registered in the network
-  Serial.println(gsmSerial.readString()+strDel);
+  Serial.println("<"+gsmSerial.readString()+strDel);
   
   gsmSerial.println("AT+CMGF=1"); // Configuring TEXT mode
-  Serial.println(gsmSerial.readString()+strDel);
+  Serial.println("<"+gsmSerial.readString()+strDel);
 
   gsmSerial.println("AT+CNMI=1,2,0,0,0"); // Decides how newly arrived SMS messages should be handled
-  Serial.println(gsmSerial.readString()+strDel);
+  Serial.println("<"+gsmSerial.readString()+strDel);
 
   gsmSerial.println("AT+CBC");
-  Serial.println(gsmSerial.readString()+strDel);
+  Serial.println("<B:"+gsmSerial.readString()+strDel);
 }
 
 String extractCharArray(){ //converts message in messageBuffer array to String 
@@ -72,7 +73,7 @@ void clearBufferAndCounter(){
 }
 
 void sendMessageToSerial(String serialMessage){
-  Serial.println("M:"+serialMessage+strDel); //sends String message to serial
+  Serial.println("<M:"+serialMessage+strDel); //sends String message to serial
   clearBufferAndCounter(); //clear buffer and reset bufferAddress counter
 }
 
@@ -85,7 +86,7 @@ void getGSMData() //get gsm message
     bufferAddress++;//increment buffer addresss
     messageBuffer[bufferAddress] = gsmSerial.read(); //store char in buffer address
   }
-  
+
   else if (gsmSerial.peek() == '>') {
     String serialMessage = extractCharArray();
     sendMessageToSerial(serialMessage);
@@ -95,5 +96,9 @@ void getGSMData() //get gsm message
 void loop()
 {
   getGSMData();
+  gsmSerial.println("AT+CSQ");//Signal quality test, value range is 0-31 , 31 is the best
+  Serial.println("<N:"+gsmSerial.readString()+strDel);
+  gsmSerial.println("AT+CBC");//Battery Level
+  Serial.println("<B:"+gsmSerial.readString()+strDel);
   // delay(300);
 }
