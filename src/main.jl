@@ -12,6 +12,7 @@ using DataFrames
 using CSV
 using CImGui.CSyntax
 using LibSerialPort
+using Match
 
 glfwDefaultWindowHints()
 glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3)
@@ -65,6 +66,22 @@ selectable_state::Vector{Bool} = Vector{Bool}([])
 message_index::UInt = 0
 logs::Vector{String} = []
 
+gsm_output::String = ""
+lcd_status::String = "Disconnected"
+network_status::String = "No Network"
+battery_level::String = "Not Found"
+
+# for serial communication
+portname::String = if Sys.iswindows()
+    "COM5"
+elseif Sys.isapple()
+    "/dev/cu.usbserial-1410"
+else
+    error("Unknown OS detected!\nSupported OS include: Windows and macOS")
+end
+
+global baudrate = 9600 #can change. VERY IMPORTANT!
+
 function Refresh() #refresh message
     global data = []
     global selectable_state = []
@@ -75,10 +92,26 @@ function Refresh() #refresh message
 
     for i in 1:num_rows
         push!(selectable_state, false)
-        push!(data, [string(df[i, 1]), string(df[i, 2]), string(df[i, 3])])
+        push!(data, [string(df[i, 1]), string(df[i, 2]), string(df[i, 3]), string(df[i, 4])])
     end
 
     updateLogs("Message List Updated")
+end
+
+function updateCSV()
+    df = DataFrame(data, :auto)
+    df = permutedims(df)
+
+    csv_file_path = "comms/data.csv"
+
+    try
+        rename!(df, [:Number, :Date, :Time, :Message])
+        CSV.write(csv_file_path, df)
+    catch
+        CSV.write(csv_file_path, df)
+    end
+
+    Refresh()
 end
 
 function DeleteMessage()
@@ -91,7 +124,6 @@ function DeleteMessage()
     end
 
     if index_remove == -1
-        println("No message selected") #send to logs later
         updateLogs("No message selected")
         return
     end
@@ -99,49 +131,218 @@ function DeleteMessage()
     deleteat!(data, index_remove) #remove vector at index_remove
     deleteat!(selectable_state, index_remove) #remove state at index_remove
 
-    df = DataFrame(data, :auto)
-    df = permutedims(df)
-
-    csv_file_path = "comms/data.csv"
-
-    try
-        rename!(df, [:Number, :Time, :Message])
-        CSV.write(csv_file_path, df)
-    catch
-        CSV.write(csv_file_path, df)
-    end
-
     updateLogs("Message Delete Successful!")
-    Refresh()
+
 end
 
 function updateLogs(a_log::String)
-    try
-        push!(logs, a_log)
-    catch
-    end
+    # try
+    push!(logs, a_log)
+    # catch
+    # end
 end
 
 function printLogs()
     for log in logs
-        CImGui.TextColored(ImVec4(1.0, 0.8, 0.0, 1.0), "> ")
+        CImGui.TextColored(ImVec4(1.0, 1.0, 1.0, 1.0), "> ")
         CImGui.SameLine()
-        CImGui.TextColored(ImVec4(0.0, 1.0, 0.0, 1.0), log)
+        CImGui.TextColored(ImVec4(1.0, 1.0, 0.0, 1.0), log)
     end
 end
 
-# for serial communication
-portname::String = if Sys.iswindows()
-    "COM5"
-    # updateLogs("WindowsOS Detected!\nUtilising COM5")
-elseif Sys.isapple()
-    "/dev/cu.usbserial-1410"
-    # updateLogs("macOS Detected\nutilising /dev/cu.usbserial-1410")
-else
-    error("Unknown OS detected!\nSupported OS include: Windows and macOS")
-end
+function processSerialResponse()
+    sleep(5) #give GUI time to load up, make gui load faster
+    while true #check if port available
+        try
+            sp = LibSerialPort.open(portname, baudrate)
+            close(sp)
+            updateLogs("Port $portname: Available!")
+            break
+        catch e
+            updateLogs("Port $portname: Unavailable!\nReconnecting....")
+            sleep(5)
+        end
+    end
 
-global baudrate = 115200 #can change
+    try
+        LibSerialPort.open(portname, baudrate) do sp
+            updateLogs("Port $portname: Connection established!")
+            serial_ref::Ref{String} = Ref("")
+            updateLogs("Discarding data remnants....")
+            sleep(2) #add time delay for nice effect
+            try
+                sp_flush(sp, SP_BUF_BOTH)  #discards left over bytes waiting at the port, both input and output buffer
+            catch e
+                updateLogs(e)
+                println(e)
+            end
+            updateLogs("Data remnants discarded")
+
+            opened = true
+            # function handleIncomingData(serial_ref::Ref{String})
+            # println("Hello Me")
+            while true
+                # println("hello you")
+                try
+                    if bytesavailable(sp) > 0 #if buffer is empty ignore code below if statement
+                        # println("Hello")
+                        chars = read(sp, Char)
+
+                        if chars == '\0' #ignore embedded nulls
+                            continue
+                        end
+
+                        # check for beginning and end of serial input using '<' and '>'
+                        if chars == '<'
+                            global opened = true
+                            continue
+
+                        elseif chars == '>'
+                            global opened = false
+                        end
+
+                        if opened
+                            try
+                                serial_ref[] = serial_ref[] * string(chars)
+                                continue
+                            catch
+                                println("serial_ref concatenation is the error")
+                            end
+                        end
+
+                        try
+                            println(serial_ref[])
+                            if length(serial_ref[]) == 1
+                                continue
+                            end
+                            # println(serial_response[1:2])
+                        catch e
+                            println("Length error stuff")
+                            println(e)
+                        end
+                        try
+                            if serial_ref[][1] == '.'
+                                serial_ref[] = serial_ref[][2:end]
+                            end
+                        catch
+                            println("Removing '.' caused the error!")
+                        end
+
+
+                        println(serial_ref)
+
+                        if !isempty(serial_ref[])
+                            @match serial_ref[][1:2] begin #check if idnetifier matches any of the patterns
+                                "L:" => begin
+                                    try
+                                        updateLogs(serial_ref[][3:end])
+                                        updateLogs("LCD Status incoming....")
+                                        global lcd_status = "Connected"
+                                        global serial_ref[] = ""
+                                    catch e
+                                        println(e)
+                                        updateLogs(e)
+                                    end
+
+                                end
+
+                                "B:" => begin
+                                    try
+                                        updateLogs(serial_ref[])
+                                        updateLogs("Battery Status Incoming....")
+                                        sleep(1)
+                                        sub_ref = findfirst("+CBC: ", serial_ref[])[end] + 1
+                                        sub_ref_split = split(sub_ref, ',')
+                                        global battery_level = "$(sub_ref_split[2])/100"
+                                    catch
+                                        global battery_level = "Not Found"
+                                        println(e)
+                                        updateLogs(e)
+                                    end
+
+                                end
+
+                                "N:" => begin
+                                    try
+                                        # global network_status = split(serial_ref[][22:end], ',')
+                                        updateLogs(serial_ref[])
+                                        updateLogs("Network Status Incoming....")
+                                        sleep(1)
+                                        index_start = findfirst("+CSQ: ", serial_ref[])[end] + 1
+                                        sub_ref = serial_ref[][index_start:end]
+                                        network_level = round(Int, (parse(Int, split(sub_ref, ',')[1]) / 31) * 100)
+                                        global network_status = "$network_level/100"
+                                        global serial_ref[] = ""
+                                    catch e
+                                        global network_status = "No Network"
+                                        println(e)
+                                        updateLogs(e)
+                                    end
+
+                                end
+
+                                "M:" => begin
+                                    try
+                                        updateLogs("Message Incoming...")
+                                        sleep(2)
+                                        updateLogs(serial_ref[])
+
+                                        index_start = findfirst("+CMT: ", serial_ref[])[end] + 1
+                                        sub_ref = serial_ref[][index_start:end]
+                                        data_split = split(sub_ref, ',')
+                                        phone_number = "+" * data_split[1][2:end-1]
+                                        println(phone_number)
+                                        m_date = data_split[3][2:end]
+                                        println(m_date)
+                                        m_time_mess = split(data_split[4], '\r')
+                                        m_time = m_time_mess[1][2:end-3]
+                                        println(m_time)
+                                        mess = m_time_mess[2]
+                                        println(mess)
+
+                                        updateLogs("Phone number: $phone_number\nDate: $m_date\nTime: $m_time")
+
+                                        push!(data, [phone_number, m_date, m_time, mess])
+                                        updateCSV()
+                                        global serial_ref[] = ""
+                                    catch e
+                                        println(e)
+                                        updateLogs(e)
+                                    end
+
+                                end
+
+                                _ => begin
+                                    try
+                                        updateLogs(serial_ref[])
+                                        println(serial_ref[])
+                                        global serial_ref[] = ""
+                                    catch e
+                                        println(e)
+                                        updateLogs(e)
+                                    end
+                                end
+                            end
+                            # global serial_ref[] = ""
+                        end
+                    end
+                catch e
+                    println(e)
+                    updateLogs(e)
+                end
+                sleep(0.01)
+            end
+            # end
+            # handleIncomingData(serial_ref)
+        end
+    catch e
+        println(e)
+        updateLogs(e)
+    end
+end
+# @async processSerialResponse()
+
+Threads.@spawn processSerialResponse()
 
 try
     demo_open = true
@@ -168,11 +369,21 @@ try
         CImGui.BeginChild("Status", (width[] * 0.989, height[] * 0.037), true, CImGui.ImGuiWindowFlags_NoScrollbar)
         CImGui.TextColored((1.0, 1.0, 0.5, 1.0), "LCD Status: ")
         CImGui.SameLine()
-        CImGui.TextColored((0.0, 1.0, 0.0, 1.0), "Good")
+
+        CImGui.TextColored((1.0, 1.0, 0.0, 1.0), lcd_status)
+
+
         CImGui.SameLine()
-        CImGui.TextColored((1.0, 1.0, 0.5, 1.0), "Network Status: ")
+        CImGui.TextColored((1.0, 1.0, 0.5, 1.0), "Network Level: ")
         CImGui.SameLine()
-        CImGui.TextColored((0.0, 1.0, 0.0, 1.0), "Good")
+
+        CImGui.TextColored((1.0, 1.0, 0.0, 1.0), network_status)
+
+        CImGui.SameLine()
+        CImGui.TextColored((1.0, 1.0, 0.5, 1.0), "Battery Level: ")
+        CImGui.SameLine()
+
+        CImGui.TextColored((1.0, 1.0, 0.0, 1.0), battery_level)
 
         CImGui.EndChild()
 
@@ -196,13 +407,12 @@ try
             CImGui.Separator()
 
             for row_index in eachindex(data)
-                if CImGui.Selectable("Phone Number: $(data[row_index][1])\nTime: $(data[row_index][2])", selectable_state[row_index], 0) #create selectable
+                if CImGui.Selectable("Phone Number: $(data[row_index][1])\nDate: $(data[row_index][2])\nTime: $(data[row_index][3])", selectable_state[row_index], 0) #create selectable
                     for counter in eachindex(data) #deselect all
                         global selectable_state[counter] = false
                     end
                     global message_index = row_index
                     global selectable_state[row_index] = true #select selectable
-
                 end
                 CImGui.Dummy((0, 5))
             end
@@ -214,6 +424,9 @@ try
         end
 
         if CImGui.BeginTabItem("Allowed")
+            for counter in eachindex(data) #deselect selectables 
+                global selectable_state[counter] = false
+            end
 
             CImGui.TextColored((0.0, 1.0, 0.0, 1.0), "Allowed List")
             CImGui.Separator()
@@ -240,46 +453,19 @@ try
                 message_to_send = data[message_index][3] * "\n"
                 try
                     LibSerialPort.open(portname, baudrate) do sp
-                        sleep(2) #gives time to establish serial connection
+                        # sleep(0.2) #gives time to establish serial connection
                         sp_flush(sp, SP_BUF_BOTH) #discards left over bytes waiting at the port, both input and output buffer
                         write(sp, "L1:$message_to_send")
                         updateLogs("Message sent to port")
-                        serial_response = readline(sp)
 
-                        if !isempty(serial_response)
-                            println(serial_response)
-                            updateLogs("Successful\nResponse: $serial_response")
-                        else
-                            updateLogs("Failed! No Response")
-                        end
-                    end
-                catch e
-                    println(e)
-                    updateLogs(string(e))
-                end
-            else
-                println("No message selected") #send to logs later
-                updateLogs("No message selected")
-            end
-        end
+                        # serial_response = readline(sp)
 
-        CImGui.SameLine()
-        if CImGui.Button("Load to LCD2")
-            if message_index != 0
-                message_to_send = data[message_index][3] * "\n"
-                try
-                    LibSerialPort.open(portname, baudrate) do sp
-                        sleep(1) #gives time to establish serial connection
-                        sp_flush(sp, SP_BUF_BOTH) #discards left over bytes waiting at the port, both input and output buffer
-                        write(sp, "L2:$message_to_send")
-                        serial_response = readline(sp)
-
-                        if !isempty(serial_response)
-                            println(serial_response)
-                            updateLogs("Successful\nResponse: $serial_response")
-                        else
-                            updateLogs("Failed! No Response")
-                        end
+                        # if !isempty(serial_response)
+                        #     println(serial_response)
+                        #     updateLogs("Successful\nResponse: $serial_response")
+                        # else
+                        #     updateLogs("Failed! No Response")
+                        # end
                     end
                 catch e
                     println(e)
@@ -299,9 +485,8 @@ try
 
         CImGui.Separator()
 
-        # CImGui.SameLine(0.0, -1)
         if message_index != 0
-            CImGui.TextWrapped(data[message_index][3])
+            CImGui.TextWrapped(data[message_index][4])
 
         else
             CImGui.TextWrapped("")
@@ -313,7 +498,6 @@ try
         CImGui.TextColored((1.0, 0.8, 0.0, 1.0), "Logs")
         CImGui.Separator()
 
-        # CImGui.TextWrapped("A text")
         printLogs()
 
         CImGui.EndChild()
@@ -346,9 +530,12 @@ try
         end
 
         glfwSwapBuffers(window)
+
+        sleep(0.01)
     end
 catch e
     @error "Error in renderloop!" exception = e
+    updateLogs(e)
     Base.show_backtrace(stderr, catch_backtrace())
 finally
     ImGuiOpenGLBackend.shutdown(gl_ctx)
@@ -357,4 +544,3 @@ finally
     glfwDestroyWindow(window)
 
 end
-

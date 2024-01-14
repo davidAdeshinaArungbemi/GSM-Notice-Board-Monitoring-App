@@ -1,5 +1,7 @@
-Number,Time,Message
-+234 38456512,19:20:05,Art is cool!
-+222 18456582,20:16:2,Hallo! Julia.Guten Morgen Andy! Wein und brot. bitte!
-+234 38446582,13:23:10,12:40pm: Applied Mechanics Exam
-+232 3845d512,14:51:20,26th August-12pm Sing!
+Number,Date,Time,Message
+2348116414737,24/01/14,18:43:30+04,Hi
+2348116414737,24/01/14,18:46:51+04,Hello me
+2348116414737,24/01/14,8:48:50+0,Today is Sunday!
++2348116414737,24/01/14,8:50:29+,"
+Today is Sunday!
+The gsm notice board app is a success"
