@@ -71,6 +71,8 @@ lcd_status::String = "Disconnected"
 network_status::String = "No Network"
 battery_level::String = "Not Found"
 
+lcd_data::String = ""
+
 # for serial communication
 portname::String = if Sys.iswindows()
     "COM5"
@@ -182,7 +184,14 @@ function processSerialResponse()
             # function handleIncomingData(serial_ref::Ref{String})
             # println("Hello Me")
             while true
-                # println("hello you")
+                try
+                    if length(lcd_data) > 0
+                        write(sp, "L1:$lcd_data")
+                        updateLogs("Message sent to port")
+                        global lcd_data = ""
+                    end
+                catch
+                end
                 try
                     if bytesavailable(sp) > 0 #if buffer is empty ignore code below if statement
                         # println("Hello")
@@ -249,24 +258,24 @@ function processSerialResponse()
                                 "B:" => begin
                                     try
                                         updateLogs(serial_ref[])
-                                        updateLogs("Battery Status Incoming....")
+                                        # updateLogs("Battery Status Incoming....")
                                         sleep(1)
-                                        sub_ref = findfirst("+CBC: ", serial_ref[])[end] + 1
+                                        index_start = findfirst("+CBC: ", serial_ref[])[end] + 1
+                                        sub_ref = serial_ref[][index_start:end]
                                         sub_ref_split = split(sub_ref, ',')
                                         global battery_level = "$(sub_ref_split[2])/100"
-                                    catch
+                                    catch e
                                         global battery_level = "Not Found"
                                         println(e)
                                         updateLogs(e)
                                     end
-
                                 end
 
                                 "N:" => begin
                                     try
                                         # global network_status = split(serial_ref[][22:end], ',')
                                         updateLogs(serial_ref[])
-                                        updateLogs("Network Status Incoming....")
+                                        # updateLogs("Network Status Incoming....")
                                         sleep(1)
                                         index_start = findfirst("+CSQ: ", serial_ref[])[end] + 1
                                         sub_ref = serial_ref[][index_start:end]
@@ -367,20 +376,19 @@ try
                                        CImGui.ImGuiWindowFlags_NoScrollbar | CImGui.ImGuiWindowFlags_NoResize)
 
         CImGui.BeginChild("Status", (width[] * 0.989, height[] * 0.037), true, CImGui.ImGuiWindowFlags_NoScrollbar)
-        CImGui.TextColored((1.0, 1.0, 0.5, 1.0), "LCD Status: ")
+        CImGui.TextColored((1.0, 1.0, 0.7, 1.0), "LCD Status: ")
         CImGui.SameLine()
 
         CImGui.TextColored((1.0, 1.0, 0.0, 1.0), lcd_status)
 
-
         CImGui.SameLine()
-        CImGui.TextColored((1.0, 1.0, 0.5, 1.0), "Network Level: ")
+        CImGui.TextColored((1.0, 1.0, 0.7, 1.0), "Network Level: ")
         CImGui.SameLine()
 
         CImGui.TextColored((1.0, 1.0, 0.0, 1.0), network_status)
 
         CImGui.SameLine()
-        CImGui.TextColored((1.0, 1.0, 0.5, 1.0), "Battery Level: ")
+        CImGui.TextColored((1.0, 1.0, 0.7, 1.0), "Battery Level: ")
         CImGui.SameLine()
 
         CImGui.TextColored((1.0, 1.0, 0.0, 1.0), battery_level)
@@ -400,9 +408,9 @@ try
 
             CImGui.PushStyleVar(CImGui.ImGuiStyleVar_FrameRounding, 10.0)
 
-            if CImGui.Button("Refresh")
-                Refresh()
-            end
+            # if CImGui.Button("Refresh")
+            #     Refresh()
+            # end
 
             CImGui.Separator()
 
@@ -451,26 +459,27 @@ try
             updateLogs("Sending to LCD1")
             if message_index != 0
                 message_to_send = data[message_index][3] * "\n"
-                try
-                    LibSerialPort.open(portname, baudrate) do sp
-                        # sleep(0.2) #gives time to establish serial connection
-                        sp_flush(sp, SP_BUF_BOTH) #discards left over bytes waiting at the port, both input and output buffer
-                        write(sp, "L1:$message_to_send")
-                        updateLogs("Message sent to port")
+                global lcd_data = message_to_send
+                # try
+                #     LibSerialPort.open(portname, baudrate) do sp
+                #         # sleep(0.2) #gives time to establish serial connection
+                #         sp_flush(sp, SP_BUF_BOTH) #discards left over bytes waiting at the port, both input and output buffer
+                #         write(sp, "L1:$message_to_send")
+                #         updateLogs("Message sent to port")
 
-                        # serial_response = readline(sp)
+                #         # serial_response = readline(sp)
 
-                        # if !isempty(serial_response)
-                        #     println(serial_response)
-                        #     updateLogs("Successful\nResponse: $serial_response")
-                        # else
-                        #     updateLogs("Failed! No Response")
-                        # end
-                    end
-                catch e
-                    println(e)
-                    updateLogs(string(e))
-                end
+                #         # if !isempty(serial_response)
+                #         #     println(serial_response)
+                #         #     updateLogs("Successful\nResponse: $serial_response")
+                #         # else
+                #         #     updateLogs("Failed! No Response")
+                #         # end
+                #     end
+                # catch e
+                #     println(e)
+                #     updateLogs(string(e))
+                # end
             else
                 println("No message selected") #send to logs later
                 updateLogs("No message selected")
