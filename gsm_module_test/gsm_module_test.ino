@@ -90,6 +90,7 @@ void getGSMData() // get gsm message
     bufferAddress++;                                 // increment buffer addresss
     messageBuffer[bufferAddress] = gsmSerial.read(); // store char in buffer address
   }
+
   else if (gsmSerial.peek() == '>')
   {
     String serialMessage = extractCharArray();
