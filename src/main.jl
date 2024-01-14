@@ -185,13 +185,17 @@ function processSerialResponse()
             # println("Hello Me")
             while true
                 try
-                    if length(lcd_data) > 0
+                    if length(lcd_data) > 0 #sends message to lcd
                         write(sp, "L1:$lcd_data")
+                        updateLogs("Sending to LCD1....")
+                        sleep(1)
                         updateLogs("Message sent to port")
                         global lcd_data = ""
                     end
-                catch
+                catch e
+                    println(e)
                 end
+
                 try
                     if bytesavailable(sp) > 0 #if buffer is empty ignore code below if statement
                         # println("Hello")
@@ -456,7 +460,6 @@ try
         CImGui.Separator()
 
         if CImGui.Button("Load to LCD1")
-            updateLogs("Sending to LCD1")
             if message_index != 0
                 message_to_send = data[message_index][3] * "\n"
                 global lcd_data = message_to_send
