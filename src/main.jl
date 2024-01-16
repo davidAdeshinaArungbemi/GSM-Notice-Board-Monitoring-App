@@ -65,6 +65,7 @@ data::Vector{Vector{String}} = Vector{Vector{String}}([])
 selectable_state::Vector{Bool} = Vector{Bool}([])
 message_index::UInt = 0
 logs::Vector{String} = []
+opened = true
 
 gsm_output::String = ""
 lcd_status::String = "Disconnected"
@@ -138,17 +139,22 @@ function DeleteMessage()
 end
 
 function updateLogs(a_log::String)
-    # try
-    push!(logs, a_log)
-    # catch
-    # end
+    try
+        push!(logs, a_log)
+    catch e
+        println(e)
+    end
 end
 
 function printLogs()
-    for log in logs
-        CImGui.TextColored(ImVec4(1.0, 1.0, 1.0, 1.0), "> ")
-        CImGui.SameLine()
-        CImGui.TextColored(ImVec4(1.0, 1.0, 0.0, 1.0), log)
+    try
+        for log in logs
+            CImGui.TextColored(ImVec4(1.0, 1.0, 1.0, 1.0), "> ")
+            CImGui.SameLine()
+            CImGui.TextColored(ImVec4(1.0, 1.0, 0.0, 1.0), log)
+        end
+    catch
+        println(e)
     end
 end
 
@@ -170,22 +176,21 @@ function processSerialResponse()
         LibSerialPort.open(portname, baudrate) do sp
             updateLogs("Port $portname: Connection established!")
             serial_ref::Ref{String} = Ref("")
-            updateLogs("Discarding data remnants....")
-            sleep(2) #add time delay for nice effect
-            try
-                sp_flush(sp, SP_BUF_BOTH)  #discards left over bytes waiting at the port, both input and output buffer
-            catch e
-                updateLogs(e)
-                println(e)
-            end
-            updateLogs("Data remnants discarded")
+            # updateLogs("Discarding data remnants....")
+            # sleep(2) #add time delay for nice effect
+            # try
+            #     sp_flush(sp, SP_BUF_BOTH)  #discards left over bytes waiting at the port, both input and output buffer
+            # catch e
+            #     updateLogs(e)
+            #     println(e)
+            # end
+            # updateLogs("Data remnants discarded")
 
-            opened = true
-            # function handleIncomingData(serial_ref::Ref{String})
-            # println("Hello Me")
             while true
                 try
                     if length(lcd_data) > 0 #sends message to lcd
+                        println("I ran to write to port")
+                        println("LCD data")
                         write(sp, "L1:$lcd_data")
                         updateLogs("Sending to LCD1....")
                         sleep(1)
@@ -193,12 +198,12 @@ function processSerialResponse()
                         global lcd_data = ""
                     end
                 catch e
+                    println("Writing to port error")
                     println(e)
                 end
 
                 try
                     if bytesavailable(sp) > 0 #if buffer is empty ignore code below if statement
-                        # println("Hello")
                         chars = read(sp, Char)
 
                         if chars == '\0' #ignore embedded nulls
@@ -224,7 +229,7 @@ function processSerialResponse()
                         end
 
                         try
-                            println(serial_ref[])
+                            # println(serial_ref[])
                             if length(serial_ref[]) == 1
                                 continue
                             end
@@ -233,6 +238,7 @@ function processSerialResponse()
                             println("Length error stuff")
                             println(e)
                         end
+
                         try
                             if serial_ref[][1] == '.'
                                 serial_ref[] = serial_ref[][2:end]
@@ -241,102 +247,106 @@ function processSerialResponse()
                             println("Removing '.' caused the error!")
                         end
 
-
-                        println(serial_ref)
+                        print(serial_ref[])
 
                         if !isempty(serial_ref[])
-                            @match serial_ref[][1:2] begin #check if idnetifier matches any of the patterns
-                                "L:" => begin
-                                    try
-                                        updateLogs(serial_ref[][3:end])
-                                        updateLogs("LCD Status incoming....")
-                                        global lcd_status = "Connected"
-                                        global serial_ref[] = ""
-                                    catch e
-                                        println(e)
-                                        updateLogs(e)
-                                    end
-
+                            # print("<" * serial_ref[] * ">")
+                            if occursin("L:", serial_ref[])
+                                try
+                                    # updateLogs(serial_ref[][3:end])
+                                    updateLogs("LCD Status incoming....")
+                                    global lcd_status = "Connected"
+                                    global serial_ref[] = ""
+                                catch e
+                                    println(e)
+                                    updateLogs(e)
+                                    global serial_ref[] = ""
                                 end
 
-                                "B:" => begin
-                                    try
-                                        updateLogs(serial_ref[])
-                                        # updateLogs("Battery Status Incoming....")
-                                        sleep(1)
-                                        index_start = findfirst("+CBC: ", serial_ref[])[end] + 1
-                                        sub_ref = serial_ref[][index_start:end]
-                                        sub_ref_split = split(sub_ref, ',')
-                                        global battery_level = "$(sub_ref_split[2])/100"
-                                    catch e
-                                        global battery_level = "Not Found"
-                                        println(e)
-                                        updateLogs(e)
-                                    end
+                            end
+
+                            if occursin("B:", serial_ref[])
+                                try
+                                    # updateLogs(serial_ref[])
+                                    # updateLogs("Battery Status Incoming....")
+                                    sleep(1)
+                                    index_start = findfirst("+CBC: ", serial_ref[])[end] + 1
+                                    sub_ref = serial_ref[][index_start:end]
+                                    sub_ref_split = split(sub_ref, ',')
+                                    global battery_level = "$(sub_ref_split[2])/100"
+                                catch e
+                                    global battery_level = "Not Found"
+                                    println(e)
+                                    updateLogs(e)
+                                    global serial_ref[] = ""
                                 end
 
-                                "N:" => begin
-                                    try
-                                        # global network_status = split(serial_ref[][22:end], ',')
-                                        updateLogs(serial_ref[])
-                                        # updateLogs("Network Status Incoming....")
-                                        sleep(1)
-                                        index_start = findfirst("+CSQ: ", serial_ref[])[end] + 1
-                                        sub_ref = serial_ref[][index_start:end]
-                                        network_level = round(Int, (parse(Int, split(sub_ref, ',')[1]) / 31) * 100)
-                                        global network_status = "$network_level/100"
-                                        global serial_ref[] = ""
-                                    catch e
-                                        global network_status = "No Network"
-                                        println(e)
-                                        updateLogs(e)
-                                    end
-
-                                end
-
-                                "M:" => begin
-                                    try
-                                        updateLogs("Message Incoming...")
-                                        sleep(2)
-                                        updateLogs(serial_ref[])
-
-                                        index_start = findfirst("+CMT: ", serial_ref[])[end] + 1
-                                        sub_ref = serial_ref[][index_start:end]
-                                        data_split = split(sub_ref, ',')
-                                        phone_number = "+" * data_split[1][2:end-1]
-                                        println(phone_number)
-                                        m_date = data_split[3][2:end]
-                                        println(m_date)
-                                        m_time_mess = split(data_split[4], '\r')
-                                        m_time = m_time_mess[1][2:end-3]
-                                        println(m_time)
-                                        mess = m_time_mess[2]
-                                        println(mess)
-
-                                        updateLogs("Phone number: $phone_number\nDate: $m_date\nTime: $m_time")
-
-                                        push!(data, [phone_number, m_date, m_time, mess])
-                                        updateCSV()
-                                        global serial_ref[] = ""
-                                    catch e
-                                        println(e)
-                                        updateLogs(e)
-                                    end
-
-                                end
-
-                                _ => begin
-                                    try
-                                        updateLogs(serial_ref[])
-                                        println(serial_ref[])
-                                        global serial_ref[] = ""
-                                    catch e
-                                        println(e)
-                                        updateLogs(e)
-                                    end
+                            end
+                            if occursin("N:", serial_ref[])
+                                try
+                                    # updateLogs("Network Status Incoming....")
+                                    sleep(1)
+                                    index_start = findfirst("+CSQ: ", serial_ref[])[end] + 1
+                                    sub_ref = serial_ref[][index_start:end]
+                                    network_level = round(Int, (parse(Int, split(sub_ref, ',')[1]) / 31) * 100)
+                                    global network_status = "$network_level/100"
+                                    global serial_ref[] = ""
+                                catch e
+                                    global network_status = "No Network"
+                                    println(e)
+                                    updateLogs(e)
+                                    global serial_ref[] = ""
                                 end
                             end
-                            # global serial_ref[] = ""
+
+                            if occursin("M:", serial_ref[])
+                                try
+                                    updateLogs("Message Incoming...")
+                                    sleep(2)
+                                    updateLogs(serial_ref[])
+
+                                    index_start = findfirst("+CMT: ", serial_ref[])[end] + 1
+                                    sub_ref = serial_ref[][index_start:end]
+                                    data_split = split(sub_ref, ',')
+                                    phone_number = data_split[1][2:end-1]
+                                    println(phone_number)
+                                    m_date = data_split[3][2:end]
+                                    println(m_date)
+                                    m_time_mess = split(data_split[4], '\r')
+                                    m_time = m_time_mess[1][2:end-3]
+                                    println(m_time)
+                                    mess = m_time_mess[2][2:end]
+                                    println(mess)
+
+                                    # updateLogs("Phone number: $phone_number\nDate: $m_date\nTime: $m_time")
+
+                                    push!(data, [phone_number, m_date, m_time, mess])
+                                    updateCSV()
+                                    global serial_ref[] = ""
+                                catch e
+                                    println(e)
+                                    updateLogs(e)
+                                    global serial_ref[] = ""
+                                end
+                            end
+
+                            # if occursin("Ready!", serial_ref[])
+                            #     updateLogs("Ready!")
+                            # end
+
+                            try
+                                updateLogs(serial_ref[])
+                                # println(serial_ref[])
+                                global serial_ref[] = ""
+                            catch e
+                                println(e)
+                                updateLogs(e)
+                                global serial_ref[] = ""
+                            end
+
+
+                            if occursin("M:", serial_ref[])
+                            end
                         end
                     end
                 catch e
@@ -461,7 +471,7 @@ try
 
         if CImGui.Button("Load to LCD1")
             if message_index != 0
-                message_to_send = data[message_index][3] * "\n"
+                message_to_send = data[message_index][4] * "\n"
                 global lcd_data = message_to_send
                 # try
                 #     LibSerialPort.open(portname, baudrate) do sp

@@ -49,7 +49,7 @@ void updateLCD(){
 }
 
 void setup() {
-  Serial.begin(115200); // Initialize serial communication with a baud rate of 9600
+  Serial.begin(9600); // Initialize serial communication with a baud rate of 9600
   //initialize lcd1 and lcd2 screen
   lcd1.begin();
   // lcd2.begin();
