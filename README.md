@@ -6,7 +6,8 @@ Consists of:
 - Code for GUI using Julia CImGui library
 - Inter Font from google
 
-<img width="1440" alt="monitoring app" src="https://github.com/davidAdeshinaArungbemi/GSM-Notice-Board-Monitoring-App/assets/105245707/6aecf3a5-f8d1-4b85-8881-42294a6325b1">
+<img width="1440" alt="monitoring app" src="https://github.com/davidAdeshinaArungbemi/GSM-Notice-Board-Monitoring-App/assets/105245707/5638c13c-dd6c-4763-85f3-7d36917757b3">
+
 
 ## Main Hardware Components:
 1. Sim800l module
