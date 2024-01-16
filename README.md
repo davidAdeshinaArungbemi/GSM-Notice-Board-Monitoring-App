@@ -14,8 +14,10 @@ Consists of:
 2. Arduinoo Uno R3 SMD
 3. 16x2 LCD Display
 
-![20240116_074029](https://github.com/davidAdeshinaArungbemi/GSM-Notice-Board-Monitoring-App/assets/105245707/a76ff6ff-d9c8-4ebe-8eb8-5e6c3f9921b2)
-![20240116_075018](https://github.com/davidAdeshinaArungbemi/GSM-Notice-Board-Monitoring-App/assets/105245707/8df6d98f-4c03-422c-920b-86b2216addf4)
+![20240116_074029](https://github.com/davidAdeshinaArungbemi/GSM-Notice-Board-Monitoring-App/assets/105245707/3ff8b32e-0525-4c05-961b-804090697578)
+
+![20240116_075018](https://github.com/davidAdeshinaArungbemi/GSM-Notice-Board-Monitoring-App/assets/105245707/ac8fd682-3836-4767-a1e4-55186e5fbdf5)
+
 
 ## GSM Notice Board App
 1. Received Messages: Provides notifications on latest messages sent
