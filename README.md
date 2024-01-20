@@ -13,7 +13,8 @@ Consists of:
 3. 16x2 LCD Display
 
 ![20240116_074029](https://github.com/davidAdeshinaArungbemi/GSM-Notice-Board-Monitoring-App/assets/105245707/872d9090-0822-4584-b4d4-1e65c238ad8c)
-<img src="[https://github.com/favicon.ico](https://github.com/davidAdeshinaArungbemi/GSM-Notice-Board-Monitoring-App/assets/105245707/872d9090-0822-4584-b4d4-1e65c238ad8c)" width="48">
+
+<img src="[https://github.com/favicon.ico](https://github.com/davidAdeshinaArungbemi/GSM-Notice-Board-Monitoring-App/assets/105245707/872d9090-0822-4584-b4d4-1e65c238ad8c)" width="10">
 
 
 ![20240116_075018](https://github.com/davidAdeshinaArungbemi/GSM-Notice-Board-Monitoring-App/assets/105245707/ac8fd682-3836-4767-a1e4-55186e5fbdf5)
