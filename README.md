@@ -1,5 +1,3 @@
-<img width="1434" alt="monitoring app" src="https://github.com/davidAdeshinaArungbemi/GSM-Notice-Board-Monitoring-App/assets/105245707/2866bdca-3dcf-4665-b673-893e8821d4f8"># GSM-Notice-Board-Monitoring-App
-
 Code for Microcomputer Hardware and Software project
 
 Consists of:
