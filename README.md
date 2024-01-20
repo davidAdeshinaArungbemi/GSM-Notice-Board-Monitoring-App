@@ -12,8 +12,6 @@ Consists of:
 2. Arduinoo Uno R3 SMD
 3. 16x2 LCD Display
 
-![20240116_074029](https://github.com/davidAdeshinaArungbemi/GSM-Notice-Board-Monitoring-App/assets/105245707/872d9090-0822-4584-b4d4-1e65c238ad8c)
-
 <img src="[https://github.com/favicon.ico](https://github.com/davidAdeshinaArungbemi/GSM-Notice-Board-Monitoring-App/assets/105245707/872d9090-0822-4584-b4d4-1e65c238ad8c)" width="10">
 
 
