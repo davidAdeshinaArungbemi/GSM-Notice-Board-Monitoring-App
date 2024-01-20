@@ -8,9 +8,9 @@ Consists of:
 
 
 ## Main Hardware Components:
-1. Sim800l module
-2. Arduinoo Uno R3 SMD
-3. 16x2 LCD Display
+1. Sim800l module + PCB Antenna
+3. Arduinoo Uno R3 SMD
+4. 16x2 LCD Display
 
 
 <p float="left">
